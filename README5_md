@@ -1,0 +1,77 @@
+# MoCredit AI - Automated Credit Scoring & Limit Allocation System
+
+## 1. PROJECT OVERVIEW
+**MoCredit AI** is an End-to-End Machine Learning Pipeline designed to assess default risks and automate the credit limit approval workflow in real-time. 
+
+The project addresses a core challenge for financial institutions: leveraging alternative, non-traditional behavioral data—such as screen time, bank SMS frequencies, and the number of installed applications—to score underbanked thin-file applicants who lack a traditional credit history (e.g., CIC scores). This approach optimizes approval rates while strictly mitigating bad debt risks (`loan_default`).
+
+## 2. SYSTEM ARCHITECTURE & WORKFLOW
+The system is modularized into independent components to ensure encapsulation and scalability from training to production deployment:
+```
+[Alternative Data Source]
+│
+▼ (Stage 1 & 2: main1.ipynb)
+[Data Cleaning & Categorical One-Hot Encoding]
+│
+▼
+[Advanced LightGBM Classifier Training] ───► [Serialized Model (lgb_model.pkl)]
+│
+▼ (Stage 4 Deployment)
+[FastAPI Production Backend]
+▲
+│ (HTTP POST / Requests)
+▼
+[Streamlit Frontend UI]
+```
+## 3. CORE PIPELINE STAGES
+
+### Stage 1 & 2: EDA, Feature Engineering & Model Training (`main1.ipynb`)
+* **Exploratory Data Analysis (EDA):** Investigated data distributions, handled statistical outliers, and analyzed correlations among raw behavioral variables.
+* **Feature Matrix Alignment:** Converted categorical variables (`income_bracket`, `employment_type`, `education_level`, `cluster_id`) into binary columns using One-Hot Encoding. The system explicitly aligns the input shape into a **24-feature matrix of float values** to optimize the learning speed of tree-based models.
+* **Model Training:** Employed an advanced **LightGBM (Light Gradient Boosting Machine)** classifier, which maximizes computational efficiency, excels at processing noisy tabular data, and serializes the trained parameters into `lgb_model.pkl`.
+
+### Stage 3: Credit Policy & Business Logic (`app.py`)
+Defined an automated credit limit allocation algorithm by fusing AI-driven risk probabilities with traditional financial thresholds:
+* **Hard Risk Boundary:** If the AI-predicted default probability (`risk_score_probability`) exceeds $50\%$, the profile is instantly `Rejected` and the credit limit is set to `0 VND`.
+* **Base Credit Limit:** Allocates foundational limits based on the user's `income_bracket` (ranging from Tier 1 to Tier 3), granting a baseline from 2,000,000 VND to 10,000,000 VND.
+* **Debt Brake & Behavioral Rewards:** Automatically slashes the credit limit by 50% if the existing debt exceeds the safety threshold (equivalent to $625,000,000$ VND). Conversely, a bonus limit is rewarded to users exhibiting healthy behaviors (e.g., minimal installation of high-risk financial applications).
+
+### Stage 4: API Production Backend & Frontend Integration
+* **Backend (`app.py`):** Developed using **FastAPI**, incorporating a defensive zero-filled matrix mechanism for the 24 float features with `.0` suffixes. This ensures absolute alignment with the native LightGBM model and completely eliminates `Shape Mismatch Errors`.
+* **Frontend (`interface.py`):** Built a real-time interactive user interface via **Streamlit**, allowing credit officers or evaluation boards to test individual profiles visually.
+
+---
+
+## 🔍 4. RE-ENGINEERING DATA SPECIFICATIONS (24-Feature Matrix)
+To successfully pass the strict structural requirements of the LightGBM inference model, incoming payloads must be strictly mapped into the following data matrix schema before entering `predict_proba`:
+
+| No. | Feature Name | Data Type | Business Description |
+|---|---|---|---|
+| 1-6 | `financial_apps_installed`, ... | `float64` | Behavioral metrics for app usage and transactions |
+| 7 | `existing_debt_amount` | `float64` | Base system debt value (converted into USD) |
+| 8-10 | `income_bracket_1.0` -> `3.0` | `float64` | One-Hot encoded income bracket dummy columns |
+| 11-13 | `employment_type_1.0` -> `3.0` | `float64` | One-Hot encoded employment type dummy columns |
+| 14-16 | `education_level_1.0` -> `3.0` | `float64` | One-Hot encoded education level dummy columns |
+| 17-19 | `cluster_id_0.0` -> `2.0` | `float64` | One-Hot encoded behavioral cluster dummy columns |
+| 20-23 | `income_bracket`, `employment_type`, ...| `float64` | Raw numerical features serving decision tree splits |
+
+---
+
+## 🚀 5. INSTALLATION & SETUP GUIDE
+
+### Prerequisites
+* Python version `3.10` or higher installed on your local machine.
+* All required project source files: `app.py`, `interface.py`, `lgb_model.pkl`, and `requirements.txt`.
+
+### Virtual Environment Setup and Installation
+Open your Terminal at the root directory of the project (`Project_5`) and execute the following commands in sequence:
+
+```bash
+# 1. Initialize an independent virtual environment to avoid library conflicts
+python -m venv .venv
+
+# 2. Activate the virtual environment (Windows)
+.venv\Scripts\activate
+
+# 3. Install production-grade library packages
+pip install -r requirements.txt
