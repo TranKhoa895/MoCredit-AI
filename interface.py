@@ -82,46 +82,57 @@ if st.button("🚀 RUN AUTOMATED UNDERWRITING PIPELINE", type="primary", use_con
     # Currency conversion to baseline system metrics (USD)
     debt_value = float(existing_debt / 25000)
 
+    try:
+        trained_features = model.feature_name_
+    except AttributeError:
     # Re-engineering the 24-feature static matrix layout for native LightGBM alignment
-    trained_features = [
-        "financial_apps_installed", "avg_daily_screen_time_hrs", "unique_apps_per_day",
-        "bank_sms_count", "online_txn_count_last_30d", "avg_txn_amount", "existing_debt_amount",
-        "income_bracket_1.0", "income_bracket_2.0", "income_bracket_3.0",
-        "employment_type_1.0", "employment_type_2.0", "employment_type_3.0",
-        "education_level_1.0", "education_level_2.0", "education_level_3.0",
-        "cluster_id_0.0", "cluster_id_1.0", "cluster_id_2.0",
-        "income_bracket", "employment_type", "education_level", "cluster_id"
-    ]
-
+        trained_features = [
+            "financial_apps_installed", "avg_daily_screen_time_hrs", "unique_apps_per_day",
+            "bank_sms_count", "online_txn_count_last_30d", "avg_txn_amount", "existing_debt_amount",
+            "income_bracket_1.0", "income_bracket_2.0", "income_bracket_3.0",
+            "employment_type_1.0", "employment_type_2.0", "employment_type_3.0",
+            "education_level_1.0", "education_level_2.0", "education_level_3.0",
+            "cluster_id_0.0", "cluster_id_1.0", "cluster_id_2.0",
+            "income_bracket", "employment_type", "education_level", "cluster_id"
+        ]
     # Initialize a zero-filled DataFrame with exact 24-column shape
     input_data = pd.DataFrame(np.zeros((1, len(trained_features))), columns=trained_features)
-    
-    # Mapping numeric inputs
-    input_data["financial_apps_installed"] = float(financial_apps)
-    input_data["avg_daily_screen_time_hrs"] = float(screen_time)
-    input_data["unique_apps_per_day"] = float(unique_apps)
-    input_data["bank_sms_count"] = float(bank_sms)
-    input_data["online_txn_count_last_30d"] = float(online_txns)
-    input_data["avg_txn_amount"] = float(avg_txn_amt)
-    input_data["existing_debt_amount"] = float(debt_value)
 
+    for col in input_data.columns:
+        if col == "financial_apps_installed": input_data[col] = float(financial_apps)
+        elif col == "avg_daily_screen_time_hrs": input_data[col] = float(screen_time)
+        elif col == "unique_apps_per_day": input_data[col] = float(unique_apps)
+        elif col == "bank_sms_count": input_data[col] = float(bank_sms)
+        elif col == "online_txn_count_last_30d": input_data[col] = float(online_txns)
+        elif col == "avg_txn_amount": input_data[col] = float(avg_txn_amt)
+        elif col == "existing_debt_amount": input_data[col] = float(debt_value)
+    
     # Simulating One-Hot Dummy Activation
-    inc, emp, edu, clu = float(income_bracket), float(employment_type), float(education_level), float(cluster_id)
-    if f"income_bracket_{inc}" in trained_features: input_data[f"income_bracket_{inc}"] = 1.0
-    if f"employment_type_{emp}" in trained_features: input_data[f"employment_type_{emp}"] = 1.0
-    if f"education_level_{edu}" in trained_features: input_data[f"education_level_{edu}"] = 1.0
-    if f"cluster_id_{clu}" in trained_features: input_data[f"cluster_id_{clu}"] = 1.0
+    inc_val, emp_val, edu_val, clu_val = int(income_bracket), int(employment_type), int(education_level), int(cluster_id)
+    for col in [f"income_bracket_{inc_val}.0", f"income_bracket_{inc_val}"]:
+        if col in input_data.columns: input_data[col] = 1.0
+        
+    for col in [f"employment_type_{emp_val}.0", f"employment_type_{emp_val}"]:
+        if col in input_data.columns: input_data[col] = 1.0
+        
+    for col in [f"education_level_{edu_val}.0", f"education_level_{edu_val}"]:
+        if col in input_data.columns: input_data[col] = 1.0
+        
+    for col in [f"cluster_id_{clu_val}.0", f"cluster_id_{clu_val}"]:
+        if col in input_data.columns: input_data[col] = 1.0
 
     # Populating original raw features for tree splits
-    input_data["income_bracket"] = inc
-    input_data["employment_type"] = emp
-    input_data["education_level"] = edu
-    input_data["cluster_id"] = clu
+    if "income_bracket" in input_data.columns: input_data["income_bracket"] = float(inc_val)
+    if "employment_type" in input_data.columns: input_data["employment_type"] = float(emp_val)
+    if "education_level" in input_data.columns: input_data["education_level"] = float(edu_val)
+    if "cluster_id" in input_data.columns: input_data["cluster_id"] = float(clu_val)
+
+    input_data_final = input_data[trained_features].astype(float)
 
     # Machine Learning Inference Process
     with st.spinner("AI Engine is executing risk prediction calculations..."):
-        input_data_final = input_data[trained_features]
         prob_default = float(model.predict_proba(input_data_final)[:, 1][0])
+
 
     # Execute business rule limit engine
     status, allocate_limit = allocate_credit_limit(
